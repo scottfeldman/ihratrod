@@ -1,4 +1,4 @@
-"""IH rat rod - frame, rear leaf-spring suspension, front torsion-bar suspension.
+"""IH rat rod - frame, rear leaf-spring suspension, front transverse torsion bars with roller arms, vertical hairpins and panhard.
 
 Builds one FreeCAD document ("IH_frame", saved to models/IH frame.FCStd) in the
 same world coordinates as the IH rat rod assembly:
@@ -32,15 +32,16 @@ CM_D, CM_BF, CM_TW, CM_TF = 3 * IN, 1.410 * IN, 0.170 * IN, 0.273 * IN
 TP = 0.25 * IN                      # thickness of gusset / mounting plates (1/4")
 
 # Rail layout (centerline of each rail)
-X_C_FRONT = 10.0 * IN               # 20" between rail centerlines up front
+X_C_FRONT = 271.0                   # rail centreline up front: outer web face at 291; the torsion arms sit just outside it, inboard of the pad bracket and hairpins
+SHOCK_TOP_X = 415.0                 # shock tower top |X| (where it was with the rails at 325)
 X_C_REAR = 495.3                    # = rear axle spring-perch X (39.0" between perches)
-Z_F = 12.0                          # rail centerline height, front section
+Z_F = 0.0                           # rail centerline height, front section (lowered so the level torsion bars clear the bottom flange)
 Z_R = 225.0                         # rail centerline height, rear (kicked-up) section
-Y_RAIL_FRONT, Y_RAIL_END = -420.0, 3550.0
+Y_RAIL_FRONT, Y_RAIL_END = 15.0, 3550.0
 Y_JOG0, Y_JOG1 = 1450.0, 1700.0     # abrupt step from 20" to 39" wide
 Y_KICK0, Y_KICK1 = 1750.0, 2150.0   # kick-up over the rear axle
 
-CM_YS = [-340.0, 200.0, 900.0, 1350.0, 2400.0, None, 3450.0]   # None -> rear axle Y
+CM_YS = [70.0, 620.0, 900.0, 1350.0, 2400.0, None, 3450.0]   # 70 = front crossmember; None -> rear axle Y
 
 # Rivets: 3/8"
 RIV_R, HOLE_R = 0.375 * IN / 2, 0.405 * IN / 2
@@ -56,14 +57,8 @@ AXLE_TUBE_HALF = 35.4
 
 # Front torsion suspension
 BAR_R = 0.5 * IN                    # 1" torsion bar
-EYE_R = 18.9                        # torsion-arm eye: bushing outer radius (11 mm bushing wall on the 5/8" pin)
-ARM_BOSS_R = EYE_R + 6.1            # round boss around the eye at the arm tip
-BAR_REAR_Y = 590.0
-PERCH_X = 345.0                     # the axle's original spring perch (stud), re-measured from the axle
+PERCH_X = 345.0                     # the axle's spring pad (centre-bolt indent), re-measured from the axle
 SHOCK_AX_X, SHOCK_AX_Z = 596.5, -28.5   # the axle's original shock-mount holes (re-measured from the axle)
-LADDER_FRAME_Y, LADDER_AXLE_Y = 760.0, 40.0
-LADDER_FR_X = 350.0                 # ladder frame pivot, outboard of the torsion bar (bar is at |x| = 304)
-
 # --------------------------------------------------------------------------
 # measured / fallback values from the assembly
 # --------------------------------------------------------------------------
@@ -92,20 +87,56 @@ def axle_top(x):
     except Exception:
         return -169.5
 
-try:                                    # find the spring-perch stud and the shock-mount hole on the real axle
+def axle_mid(x):
+    """Z of the middle of the front axle beam at |x| (live from the assembly)."""
+    try:
+        c = _fa.common(Part.makeBox(10, 400, 1000, V(abs(x) - 5, -200, -500)))
+        return (c.BoundBox.ZMin + c.BoundBox.ZMax) / 2.0
+    except Exception:
+        return -175.0
+
+try:                                    # find the spring-pad indent and the shock-mount hole on the real axle
     for _f in _fa.Faces:
         _sf, _b = _f.Surface, _f.BoundBox
         if _sf.__class__.__name__ != 'Cylinder' or _b.XMin < 0:
             continue
-        if abs(_sf.Axis.z) > 0.99 and abs(_sf.Radius - 6.3) < 0.3:
+        if abs(_sf.Axis.z) > 0.99 and abs(_sf.Radius - 9.525) < 0.2:
             PERCH_X = (_b.XMin + _b.XMax) / 2.0
         elif abs(_sf.Axis.y) > 0.99 and abs(_sf.Radius - 9.5) < 0.2 and _f.Area > 2000:
             SHOCK_AX_X, SHOCK_AX_Z = (_b.XMin + _b.XMax) / 2.0, (_b.ZMin + _b.ZMax) / 2.0
 except Exception:
     pass
 
-BAR_Z = SHOCK_AX_Z                  # torsion bars and arms level with the axle-end pin (arms horizontal)
-LADDER_Z = SHOCK_AX_Z               # ladder bars horizontal at the same height (no roll lock)
+BAR_Z = SHOCK_AX_Z                  # torsion bars level, parallel to the axle; arms swing about this axis (clears the rail's bottom flange)
+ARM_CC = {'L': 16.5 * IN, 'R': 16.5 * IN}   # custom torsion arms, both 16.5 in: hub centre to tip hole
+ARM_T = 0.75 * IN                   # arm thickness (forged aluminium I-beam, 2" wide at the hub)
+ARM_HUB_R = 1.0 * IN                # arm hub boss, 2" across
+ARM_TIP_R = 14.0                    # arm tip boss (assumed)
+SPLINE_R = 1.13 * IN / 2.0          # 48-spline bar end / arm hub bore, 1.13" OD (arm bore is cut to the bar end)
+ROLLER_R, ROLLER_W = 15.0, 26.6     # roller on the arm tip, centred on the spring perch, inboard of the arm
+SADDLE_T = 1.0 * IN                 # custom axle bracket: saddle plate on the axle's spring pad (roller bearing surface), plus risers
+AX_FLAT_TOP = axle_top(320.0)       # top of the axle's flared spring pad (the saddle plate sits on it)
+AX_PAD_T = 12.7                     # spring pad plate thickness on the axle (see front axle.FCStd, SpringPad)
+ROLLER_PIN_R = 6.35                 # 1/2" roller pin (tip hole size assumed)
+SHOCK_TOWER_Y = 60.0                # shock towers, set back from the axle
+SHOCK_EYE_Y = FA_Y1 + 11.6          # lower shock eye, against the back face of the axle
+HP_ROD = 27.0 * IN                  # hairpin: 27" bend-to-heim length (Speedway 91635023 pattern)
+HP_HALF = 2.5 * IN                  # hairpin: legs 5" centre to centre at the axle bracket, one above the other
+HP_AXLE_X = PERCH_X                 # hairpin axle ears: centred on the spring pad, on the pad bracket
+HP_Z = AX_FLAT_TOP - 12.0 + HP_HALF    # hairpin centre height: lower leg just below the pad top (clears the panhard bar), upper leg 5" above
+HP_AXLE_Y = 57.0                    # heims at the axle, behind the bracket's riser plate (the pad's rear edge is at 28)
+HP_BEND_Y = HP_AXLE_Y + HP_ROD      # bend (frame pivot) Y
+HP_TUBE_R = 0.625 * IN              # placeholder: 1-1/4" OD fabricated tube (size to be confirmed)
+HP_HEIM_R = 20.0                    # heim housing radius
+HP_HEIM_HALF = HP_TUBE_R + 1.0      # heim housing half-width: the ears clear the leg tube
+PIN_R = 7.9                         # 5/8" pins
+PAN_CC = 27.5 * IN                  # panhard: Speedway 28-34 Ford 4-bar bar, 27.5" eye to eye
+PAN_TUBE_R = 0.625 * IN / 2.0       # 5/8" tube
+PAN_BOLT_R = 0.25 * IN              # 1/2" bolts and heims
+PAN_HEIM_R, PAN_HEIM_HALF = 12.0, 8.0   # heim housing radius and half-width (assumed)
+PAN_FR_OFF = 14.0                   # frame pivot: 14 mm outboard of the right rail's bracket plate (inboard of the right hairpin leg)
+PAN_AX_X = PAN_CC - (X_C_FRONT + RAIL_BF / 2.0 + TP + PAN_FR_OFF)   # axle end of the panhard: the frame end is PAN_CC away, at the right rail
+PAN_Z = axle_mid(PAN_AX_X) - AX_PAD_T / 2.0   # panhard bar, level, at mid-depth of the axle beam (spring pad excluded)
 
 CM_YS = [Y_REAR_AXLE if y is None else y for y in CM_YS]
 
@@ -377,128 +408,289 @@ for sk, s in SIDES.items():
         'Shackle pins - ' + nm, 'Rear suspension', STEEL)
 
 # --------------------------------------------------------------------------
-# front torsion-bar suspension
+# front transverse torsion bars: parallel to the axle, set back in the frame. Each bar passes through its own rail
+# to a custom torsion arm outside the frame. The bars are stacked: the left bar sits one stack pitch above the right,
+# so the two equal-length arms reach the roller at slightly different angles and nearly the same lever.
 # --------------------------------------------------------------------------
-def support_block(yc, xb, s, key, label):
-    """Bar support: plate on the outside of the rail web + boss with a bar bore."""
-    xc = X_C_FRONT
-    xwo = x_wo(xc)
-    xa, xb2 = sorted((s * xwo, s * (xwo + TP)))
-    plate = boxr(xa, xb2, yc - 45, yc + 45, Z_F - 38.1, Z_F + 38.1)
-    xs = sorted((s * (xwo + TP), xb + s * 20.0))
-    boss = boxr(xs[0], xs[1], yc - 45, yc + 45, BAR_Z - 20.0, BAR_Z + 20.0)
-    shp = fuse_all([plate, boss]).cut(cylc(V(xb, yc, BAR_Z), EY, BAR_R + 0.3, 120))
-    add(key, shp, label, 'Front suspension', RED)
-    for dy in (-30.0, 30.0):
-        for dz in (32.0, 50.0):                          # above the boss, inside the web
-            joint(V(s * (xwo + TP), yc + dy, BAR_Z + dz), V(-s, 0, 0), RAIL_TW + TP, 'Rivets - front suspension',
-                  ['rail_' + ('L' if s > 0 else 'R'), key])
+BAR_STACK = 1.25 * IN               # vertical pitch of the stacked bars: 1" bar plus clearance
+BAR_ZS = {'L': BAR_Z + BAR_STACK, 'R': BAR_Z}   # bar axis height, by side
+xwi_f, xwo_f = x_wi(X_C_FRONT), x_wo(X_C_FRONT)
+ARM_WEB_GAP = 9.0                   # torsion arm inner face to the rail web's outer face (clears the rivet heads)
+HUB_CX = xwo_f + ARM_WEB_GAP + ARM_T / 2.0   # arm hub centre, |X|: the arm is inboard of the roller, just outside the rail
+# the roller rests on the top of the custom axle bracket's saddle plate, centred on the spring perch. With equal arm
+# lengths, each bar's Y position follows from its height above the roller
+SADDLE_TOP = AX_FLAT_TOP + SADDLE_T
+zr, yr = SADDLE_TOP + ROLLER_R, Y_FA
+BAR_Y = {sk: yr + math.sqrt(ARM_CC[sk] ** 2 - (BAR_ZS[sk] - zr) ** 2) for sk in SIDES}
 
+def bar_plates(sw):
+    """Plate on the inside of the web of rail `sw`, bored for both bars. This rail's own bar bears on it and the
+    opposite bar is anchored to it, so the two stacked bores share one plate. The rivets sit between and outside
+    the bores."""
+    xwi, xwo = x_wi(X_C_FRONT), x_wo(X_C_FRONT)
+    ys, zs = [BAR_Y[k] for k in SIDES], [BAR_ZS[k] for k in SIDES]
+    xa, xb2 = sorted((sw * (xwi - TP), sw * xwi))
+    plate = boxr(xa, xb2, min(ys) - 28.0, max(ys) + 28.0, min(zs) - 13.5, max(zs) + 20.0)
+    for k in SIDES:
+        plate = plate.cut(cylc(V(sw * (xwi - TP / 2.0), BAR_Y[k], BAR_ZS[k]), EX, BAR_R + 0.3, 60))
+    side = 'L' if sw > 0 else 'R'
+    add('tplate_' + side, plate, 'Torsion bar bearing and anchor plate - ' + NAME[side], 'Front suspension', RED)
+    for yv in (min(ys) - 23.5, max(ys) + 23.5):
+        for zv in (-30.0, 14.0):
+            joint(V(sw * xwo, yv, zv), V(-sw, 0, 0), RAIL_TW + TP, 'Rivets - front suspension',
+                  ['rail_' + side, 'tplate_' + side])
+
+bar_plates(+1.0)
+bar_plates(-1.0)
 for sk, s in SIDES.items():
     nm = NAME[sk]
-    xc = s * X_C_FRONT
-    xb = s * (x_wo(X_C_FRONT) + 30.0)                   # torsion bar axis: outside the rail, 30 mm out from the web
+    yb, zb = BAR_Y[sk], BAR_ZS[sk]
+    xr = s * PERCH_X                                     # roller centre: over the spring pad
+    xroll0 = xr - s * ROLLER_W / 2.0                     # inner face of the roller
+    xi0 = s * (xwo_f + ARM_WEB_GAP)                      # inner face of the arm: just outside the rail web (the arm is inboard of the roller)
+    xi1 = xi0 + s * ARM_T                                # outer face of the arm
 
-    # torsion bar
-    y_front = Y_FA - 34.0
-    add('tbar_' + sk, Part.makeCylinder(BAR_R, BAR_REAR_Y - y_front, V(xb, y_front, BAR_Z), EY),
-        'Torsion bar - ' + nm, 'Front suspension', STEEL)
-    support_block(110.0, xb, s, 'tfront_' + sk, 'Torsion bar front support - ' + nm)
-    support_block(BAR_REAR_Y - 25.0, xb, s, 'trear_' + sk, 'Torsion bar rear anchor - ' + nm)
+    # torsion bar: anchored on the opposite rail, through the bores of both bearing plates and the web of this rail;
+    # the splined end (1.13") sits in the arm hub
+    x_start = -s * xwi_f
+    x_end = xi1 + s * 4.0
+    x_stub = xi0 - s * 4.0
+    bar = Part.makeCylinder(BAR_R, abs(x_stub - x_start), V(x_start, yb, zb), V(s, 0, 0)).fuse(
+        Part.makeCylinder(SPLINE_R, abs(x_end - x_stub), V(x_stub, yb, zb), V(s, 0, 0)))
+    add('tbar_' + sk, bar, 'Torsion bar - ' + nm, 'Front suspension', STEEL)
+    drill('rail_' + sk, V(s * (xwi_f + xwo_f) / 2.0, yb, zb), EX, BAR_R + 0.3, 20.0)
 
-    # twin-plate torsion arm: runs outboard from the bar, level with the axle-end pin, and straddles the axle end.
-    # The eye is bushed (the bushing shears to take the sideways shift as the axle moves).
-    xt, zt = s * SHOCK_AX_X, SHOCK_AX_Z
-    bore = cylc(V(xb, Y_FA, BAR_Z), EY, BAR_R, 120)          # bore each piece separately (a cut after the fuse is invalid)
-    tip = cylc(V(xt, Y_FA, zt), EY, EYE_R, 120)
-    plates, bush = [], []
-    for ya, yb in ((FA_Y0 - 10.0, FA_Y0 - 0.5), (FA_Y1 + 0.5, FA_Y1 + 10.0)):
-        pts = [V(xb, ya, BAR_Z + 23.0), V(xt, ya, zt + 16.0), V(xt, ya, zt - 16.0), V(xb, ya, BAR_Z - 23.0)]
-        pl = prism(pts, V(0, yb - ya, 0)).fuse(Part.makeCylinder(ARM_BOSS_R, yb - ya, V(xt, ya, zt), EY))
-        plates.append(pl.cut(bore).cut(tip))
-        ring = Part.makeCylinder(EYE_R, yb - ya, V(xt, ya, zt), EY).cut(Part.makeCylinder(7.9, yb - ya, V(xt, ya, zt), EY))
-        bush.append(ring)
-    hub = Part.makeCylinder(20.0, FA_Y1 - FA_Y0 + 20.0, V(xb, FA_Y0 - 10.0, BAR_Z), EY).cut(bore)
-    arm = fuse_all(plates + [hub])
-    add('tarm_' + sk, arm, 'Torsion arm - ' + nm, 'Front suspension', RED)
-    add('tarmbush_' + sk, Part.makeCompound(bush), 'Torsion arm bushings - ' + nm, 'Front suspension', DARK)
+    # custom torsion arm: the hub clamps the bar end outside the rail and the arm runs forward (perpendicular to the
+    # axle) over the axle end. The roller on the tip sits inboard of the arm. Nothing is fastened to the axle: the axle
+    # pushes up on the roller and the bar holds the arm down onto it.
+    u = V(0, yr - yb, zr - zb)
+    L = u.Length
+    u.normalize()
+    n = V(0, -u.z, u.y)
 
-    # shock: from the axle's original shock-mount hole (eye on the front face) up to a tower on the rail
-    Y_SH = FA_Y0 - 21.6                                   # shock eye sits outside the arm's front plate
-    xu, zu = s * (X_C_FRONT + 90.0), Z_F + 360.0
-    L0, U0 = V(s * SHOCK_AX_X, Y_SH, SHOCK_AX_Z), V(xu, Y_SH, zu)
+    def at(d, k, x):
+        """Point d along the arm from the hub centre, k across it, in the plane X = x."""
+        return V(x, yb + u.y * d + n.y * k, zb + u.z * d + n.z * k)
+
+    def half_w(d):
+        return ARM_HUB_R + (ARM_TIP_R - ARM_HUB_R) * d / L
+
+    body = prism([at(0, ARM_HUB_R, xi0), at(L, ARM_TIP_R, xi0), at(L, -ARM_TIP_R, xi0), at(0, -ARM_HUB_R, xi0)],
+                 V(s * ARM_T, 0, 0))
+    body = body.fuse(Part.makeCylinder(ARM_HUB_R, ARM_T, V(xi0, yb, zb), V(s, 0, 0)))
+    body = body.fuse(Part.makeCylinder(ARM_TIP_R, ARM_T, V(xi0, yr, zr), V(s, 0, 0)))
+    web_t = 6.0                                          # I-beam: a 6 mm web between 5 mm rims, pocketed both sides
+    pocket_d = (ARM_T - web_t) / 2.0
+    d1, d2 = ARM_HUB_R + 7.0, L - ARM_TIP_R - 5.0
+    for xf, sgn in ((xi0, 1.0), (xi1, -1.0)):
+        pk = [at(d1, half_w(d1) - 5.0, xf), at(d2, half_w(d2) - 5.0, xf),
+              at(d2, -(half_w(d2) - 5.0), xf), at(d1, -(half_w(d1) - 5.0), xf)]
+        body = body.cut(prism(pk, V(s * sgn * pocket_d, 0, 0)))
+    body = body.cut(Part.makeCylinder(SPLINE_R, ARM_T + 20.0, V(xi0 - s * 10.0, yb, zb), V(s, 0, 0)))
+    body = body.cut(cylc(V(xi0, yr, zr), EX, ROLLER_PIN_R, 200))
+    body = body.cut(boxr(*sorted((xi0, xi1)), yb, yb + ARM_HUB_R + 2.0, zb - 1.0, zb + 1.0))   # clamp slit
+    xmid, y_pb = (xi0 + xi1) / 2.0, yb + 20.0
+    body = body.cut(cylc(V(xmid, y_pb, zb), EZ, 4.0, 60))                                            # pinch bolt hole
+    add('tarm_' + sk, body, 'Torsion arm (custom 16.5 in) - ' + nm, 'Front suspension', RED)
+    add('tpinch_' + sk, cylc(V(xmid, y_pb, zb), EZ, 4.0, 34.0), 'Arm pinch bolt (shank) - ' + nm,
+        'Front suspension', STEEL)
+    add('roller_' + sk, Part.makeCylinder(ROLLER_R, ROLLER_W, V(xroll0, yr, zr), V(s, 0, 0)).cut(
+        cylc(V(xr, yr, zr), EX, ROLLER_PIN_R, 200)), 'Arm roller - ' + nm, 'Front suspension', DARK)
+    add('rollerpin_' + sk, Part.makeCylinder(ROLLER_PIN_R, abs(xr + s * ROLLER_W / 2.0 - xi0) + 6.0,
+                                             V(xi0 - s * 3.0, yr, zr), V(s, 0, 0)),
+        'Arm roller pin - ' + nm, 'Front suspension', STEEL)
+    add('rollerspacer_' + sk, Part.makeCylinder(ROLLER_PIN_R + 5.0, abs(xroll0 - xi1), V(xi1, yr, zr), V(s, 0, 0)).cut(
+        cylc(V(xr, yr, zr), EX, ROLLER_PIN_R, 200)), 'Arm roller spacer - ' + nm, 'Front suspension', STEEL)
+
+    # shock: from the axle's own shock-mount hole (eye against the back face) up to the tower top
+    xu, zu = s * SHOCK_TOP_X, Z_F + 360.0
+    L0, U0 = V(s * SHOCK_AX_X, SHOCK_EYE_Y, SHOCK_AX_Z), V(xu, SHOCK_TOWER_Y, zu)
     dd = U0 - L0
     dl = dd.Length
     dn = V(dd); dn.normalize()
     shock = [cylc(L0, EY, 14.3, 22.2), cylc(U0, EY, 14.3, 22.2),
              Part.makeCylinder(6.35, 110.0, L0 + dn * 14.3, dn),
-             Part.makeCylinder(15.0, dl - 14.3 - 124.3, L0 + dn * 124.3, dn)]
+             Part.makeCylinder(15.0, dl - 30.0 - 124.3, L0 + dn * 124.3, dn),
+             Part.makeCylinder(6.35, 15.7, U0 - dn * 30.0, dn)]          # neck up to the top eye
     add('shock_' + sk, Part.makeCompound(shock), 'Front shock - ' + nm, 'Front suspension', DARK)
     drill('shock_' + sk, L0, EY, 8.0, 60)
     drill('shock_' + sk, U0, EY, 8.0, 60)
-    xsp, zsp = s * SHOCK_AX_X, SHOCK_AX_Z
+
+    # lower shock pin: through the axle's shock-mount hole, with the head on the back
+    xsp = s * SHOCK_AX_X
+    y_pin0, y_pin1 = FA_Y0 - 10.0, SHOCK_EYE_Y + 11.1
     add('shockpin_' + sk, Part.makeCompound([
-        Part.makeCylinder(7.9, 14.0 - (Y_SH - 11.1), V(xsp, Y_SH - 11.1, zsp), EY),
-        Part.makeCylinder(12.7, 8.0, V(xsp, Y_SH - 19.1, zsp), EY),
-        Part.makeCylinder(11.0, 8.0, V(xsp, FA_Y1 + 10.0, zsp), EY)]),
-        'Shock and arm axle pin - ' + nm, 'Front suspension', STEEL)
+        Part.makeCylinder(PIN_R, y_pin1 - y_pin0, V(xsp, y_pin0, SHOCK_AX_Z), EY),
+        Part.makeCylinder(12.7, 8.0, V(xsp, y_pin1, SHOCK_AX_Z), EY)]),
+        'Shock pin - ' + nm, 'Front suspension', STEEL)
 
-    zt = Z_F + RAIL_D / 2.0
-    xa, xb2 = sorted((xc - 26, xc + 26))
-    base = boxr(xa, xb2, Y_SH - 50, Y_SH + 50, zt, zt + TP)
-    xua = abs(xu)
-    tp = [(s * (X_C_FRONT - 26.0), zt + TP), (s * (X_C_FRONT + 26.0), zt + TP), (s * (xua + 22.0), zu - 30.0),
-          (s * (xua + 22.0), zu + 30.0), (s * (xua - 22.0), zu + 30.0)]
-    tpl = [prism([V(x_, yc_ - TP / 2.0, z_) for x_, z_ in tp], V(0, TP, 0)) for yc_ in (Y_SH - 19.7, Y_SH + 19.7)]
-    key = 'tower_' + sk
-    add(key, fuse_all([base] + tpl).cut(cylc(V(xu, Y_SH, zu), EY, 8.0, 120)),
-        'Shock tower - ' + nm, 'Front suspension', RED)
-    for dx in (-8.0, 8.0):
-        for dy in (-36.0, 36.0):
-            joint(V(xc + dx, Y_SH + dy, zt + TP), V(0, 0, -1), TP + RAIL_TF, 'Rivets - front suspension',
-                  ['rail_' + sk, key])
-    add('towerpin_' + sk, cylc(V(xu, Y_SH, zu), EY, 7.9, 52), 'Shock top pin - ' + nm, 'Front suspension', STEEL)
+# --------------------------------------------------------------------------
+# front hairpin radius rods and shock towers
+# --------------------------------------------------------------------------
+def xbox(xa_, xb_, y0, y1, z0, z1):
+    """Box spanning two X values (in either order)."""
+    return boxr(min(xa_, xb_), max(xa_, xb_), y0, y1, z0, z1)
 
-    # ladder bar: one per side, horizontal at the pin height, rod ends at both ends (no roll lock)
-    ax_x = s * PERCH_X
-    fr_x = s * LADDER_FR_X
-    A_, F_ = V(ax_x, LADDER_AXLE_Y, LADDER_Z), V(fr_x, LADDER_FRAME_Y, LADDER_Z)
-    dv = F_ - A_; dv.normalize()
-    bar = [cyl2(A_ + dv * 30.0, F_ - dv * 30.0, 15.875), cyl2(A_, A_ + dv * 30.0, 9.525),
-           cyl2(F_, F_ - dv * 30.0, 9.525), cylc(A_, EZ, 14.3, 21.4), cylc(F_, EZ, 14.3, 21.4)]
-    drill('ladder_' + sk, A_, EZ, 8.0, 60)
-    drill('ladder_' + sk, F_, EZ, 8.0, 60)
-    add('ladder_' + sk, fuse_all(bar), 'Ladder bar - ' + nm, 'Front suspension', DARK)
-    add('ladderpins_' + sk, Part.makeCompound([cylc(P_, EZ, 7.9, 46) for P_ in (A_, F_)]),
-        'Ladder bar pins - ' + nm, 'Front suspension', STEEL)
+# shock towers: one tubular frame for both sides - feet on the rail tops, two legs per side, a Y tube
+# at the top of each leg pair, a cross brace across the car, and ears that hold the top of each shock
+LEG_R = 0.5 * IN                     # 1" tube
+ZB = Z_F + 360.0 + 32.0              # height of the tower top tubes and cross brace
+tower = []
+for sk, s in SIDES.items():
+    nm = NAME[sk]
+    xu, zu = s * SHOCK_TOP_X, Z_F + 360.0
+    zt = Z_F + RAIL_D / 2.0          # top of the rail
+    tower.append(xbox(s * X_C_FRONT - 22.0, s * X_C_FRONT + 22.0, SHOCK_TOWER_Y - 50.0, SHOCK_TOWER_Y + 50.0,
+                      zt, zt + TP))                                    # foot on the rail top
+    for d in (-1.0, 1.0):
+        yl = SHOCK_TOWER_Y + d * 46.0
+        tower.append(cyl2(V(s * X_C_FRONT, yl, zt + TP), V(xu, yl, ZB), LEG_R))      # leg (starts on the foot)
+        ya, yb = sorted((SHOCK_TOWER_Y + d * 12.0, SHOCK_TOWER_Y + d * (12.0 + TP)))
+        tower.append(boxr(xu - 20.0, xu + 20.0, ya, yb, zu - 10.0, ZB))              # shock ear, above the rod end
+        for dx in (-8.0, 8.0):                                         # rivets into the rail top
+            joint(V(s * X_C_FRONT + dx, SHOCK_TOWER_Y + d * 24.0, zt + TP), V(0, 0, -1), TP + RAIL_TF,
+                  'Rivets - front suspension', ['rail_' + sk, 'shocktower'])
+    tower.append(cyl2(V(xu, SHOCK_TOWER_Y - 46.0, ZB), V(xu, SHOCK_TOWER_Y + 46.0, ZB), LEG_R))   # top tube
+    drill('shocktower', V(xu, SHOCK_TOWER_Y, zu), EY, 8.0, 60)
+    add('shocktoppin_' + sk, cylc(V(xu, SHOCK_TOWER_Y, zu), EY, PIN_R, 2 * (12.0 + TP)),
+        'Shock top pin - ' + nm, 'Front suspension', STEEL)
+tower.append(cyl2(V(-SHOCK_TOP_X, SHOCK_TOWER_Y, ZB), V(SHOCK_TOP_X, SHOCK_TOWER_Y, ZB), LEG_R))  # cross brace
+add('shocktower', fuse_all(tower), 'Shock towers (tubing, both sides)', 'Front suspension', RED)
 
-    # frame-side bracket: plate on the OUTSIDE of the rail web, with an ear pair for the bar
+for sk, s in SIDES.items():
+    nm = NAME[sk]
+    # hairpin radius rod (fabricated, placeholder tube), mounted upright: one U per side. Two legs, one above the
+    # other (5" centre to centre), run rearward from the axle bracket to a bend that pivots in a housing on a bracket
+    # behind the rail web.
+    xh = s * HP_AXLE_X
+    legs_z = [HP_Z - HP_HALF, HP_Z + HP_HALF]
+    key = 'hp_' + sk
+    legs = [cyl2(V(xh, HP_AXLE_Y, z), V(xh, HP_BEND_Y, z), HP_TUBE_R) for z in legs_z]
+    crossbar = cyl2(V(xh, HP_BEND_Y, legs_z[0]), V(xh, HP_BEND_Y, legs_z[1]), HP_TUBE_R)
+    heims = [cylc(V(xh, HP_AXLE_Y, z), EX, HP_HEIM_R, 2 * HP_HEIM_HALF) for z in legs_z]
+    for z in legs_z:
+        drill(key, V(xh, HP_AXLE_Y, z), EX, PIN_R, 60)
+    add(key, fuse_all(legs + [crossbar] + heims), 'Hairpin radius rod - ' + nm, 'Front suspension', STEEL)
+
+    # frame-side bracket: a bearing housing around the (vertical) bend bar, a plate back to the rail web, and a
+    # plate on the OUTSIDE of the web (riveted). The bend sits behind the rail front end, clear of the legs
     xwo = s * x_wo(X_C_FRONT)
-    xa, xb2 = sorted((xwo, xwo + s * TP))
-    plate = boxr(xa, xb2, LADDER_FRAME_Y - 60, LADDER_FRAME_Y + 60, LADDER_Z - 60.0, LADDER_Z + 60.0)
-    xs = sorted((xwo + s * TP, fr_x + s * 25.0))
-    ears = [boxr(xs[0], xs[1], LADDER_FRAME_Y - 25, LADDER_FRAME_Y + 25,
-                 LADDER_Z + dz - TP / 2.0, LADDER_Z + dz + TP / 2.0)
-            for dz in (-(11.1 + TP / 2.0), (11.1 + TP / 2.0))]
-    key = 'ladderfr_' + sk
-    add(key, fuse_all([plate] + ears).cut(cylc(F_, EZ, 8.0, 80)), 'Ladder bar frame bracket - ' + nm,
-        'Front suspension', RED)
-    for dy in (-35.0, 35.0):
-        for zz in (LADDER_Z + 8.0, LADDER_Z + 40.0):          # both rivets inside the web
-            joint(V(xwo + s * TP, LADDER_FRAME_Y + dy, zz), V(-s, 0, 0), TP + RAIL_TW, 'Rivets - front suspension',
-                  ['rail_' + sk, key])
+    hb = Part.makeSphere(HP_HEIM_R, V(xh, HP_BEND_Y, HP_Z))
+    hb = hb.cut(cylc(V(xh, HP_BEND_Y, HP_Z), EZ, HP_TUBE_R + 0.3, 140))               # bend tube passes through
+    y_arm = HP_BEND_Y + 17.2
+    arm_pl = boxr(*sorted((xwo, xh)), y_arm, y_arm + TP, HP_Z - 20.0, HP_Z + 20.0)
+    web_pl = boxr(*sorted((xwo, xwo + s * TP)), y_arm, y_arm + 52.0, HP_Z - 25.0, Z_F + 8.0)
+    key_fr = 'hpfr_' + sk
+    add(key_fr, fuse_all([hb, arm_pl, web_pl]), 'Hairpin frame bracket - ' + nm, 'Front suspension', RED)
+    for dy in (27.2, 49.2):
+        for rz in (-30.0, -12.0):                        # on the web, above the bottom flange
+            joint(V(xwo + s * TP, HP_BEND_Y + dy, rz), V(-s, 0, 0), TP + RAIL_TW, 'Rivets - front suspension',
+                  ['rail_' + sk, key_fr])
 
-    # axle-side bracket: L-bracket on the spring perch (top leg over the perch stud), a riser up to the
-    # bar height, and an ear pair for the rod end
-    pz = max(axle_top(abs(ax_x) - 20.0), axle_top(abs(ax_x) + 20.0))          # perch top, beside the stud
-    RISER_Y0 = FA_Y1 + 11.0                              # stands off the arm's rear plate (Y 0.5..10)
-    leg = boxr(ax_x - 30, ax_x + 30, FA_Y0, RISER_Y0 + TP, pz, pz + TP).cut(cylc(V(ax_x, Y_FA, pz), EZ, 7.0, 60))
-    riser = boxr(ax_x - 25, ax_x + 25, RISER_Y0, RISER_Y0 + TP, pz - 5.0, LADDER_Z + 17.5)
-    ears = [boxr(ax_x - 25, ax_x + 25, RISER_Y0 + TP, LADDER_AXLE_Y + 25,
-                 LADDER_Z + dz - TP / 2.0, LADDER_Z + dz + TP / 2.0)
-            for dz in (-(11.1 + TP / 2.0), (11.1 + TP / 2.0))]
-    add('ladderax_' + sk, fuse_all([leg, riser] + ears).cut(cylc(A_, EZ, 8.0, 80)),
-        'Ladder bar axle bracket - ' + nm, 'Front suspension', RED)
+# --------------------------------------------------------------------------
+# panhard bar (Speedway 27.5" eye to eye, 5/8" tube, 1/2" heims): level, from a bracket on the back of the axle, left of
+# centre, to the outside of the right rail web. The frame end sits behind the front crossmember's end plates (Y 120).
+PAN_Y = 150.0                                         # bar Y
+pan_xa = PAN_AX_X                                     # axle pivot X
+pan_xf = pan_xa - PAN_CC                              # frame pivot X (outside the right rail)
+xw_r = -x_wo(X_C_FRONT)                               # outer face of the right rail web
+ear_dy = PAN_HEIM_HALF + TP / 2.0                     # ear centres either side of the heim
+ear_out = ear_dy + TP / 2.0                           # outer face of each ear pair
+
+pan_rod = fuse_all([cyl2(V(pan_xf, PAN_Y, PAN_Z), V(pan_xa, PAN_Y, PAN_Z), PAN_TUBE_R),
+                    cylc(V(pan_xf, PAN_Y, PAN_Z), EY, PAN_HEIM_R, 2 * PAN_HEIM_HALF),
+                    cylc(V(pan_xa, PAN_Y, PAN_Z), EY, PAN_HEIM_R, 2 * PAN_HEIM_HALF)])
+for px in (pan_xf, pan_xa):
+    drill('panhard', V(px, PAN_Y, PAN_Z), EY, PAN_BOLT_R, 40)
+add('panhard', pan_rod, 'Panhard bar (Speedway, 27.5" eye to eye)', 'Front suspension', STEEL)
+
+# frame bracket: a plate on the outside of the right rail web (riveted), stopping above the bar, with an ear pair
+# that hangs down outside the web to the heim (the bar passes under the plate and the rail)
+z_pl0 = PAN_Z + 23.0                                  # bottom of the plate, above the bar
+pan_fr = [boxr(*sorted((xw_r, xw_r - TP)), 128.0, 174.0, z_pl0, Z_F + 8.0)]
+for d in (-ear_dy, ear_dy):
+    pan_fr.append(boxr(pan_xf - 14.0, xw_r - TP, PAN_Y + d - TP / 2.0, PAN_Y + d + TP / 2.0, PAN_Z - 18.0, z_pl0 + 12.0))
+add('panbk_fr', fuse_all(pan_fr), 'Panhard frame bracket', 'Front suspension', RED)
+drill('panbk_fr', V(pan_xf, PAN_Y, PAN_Z), EY, PAN_BOLT_R, 60)
+for dy in (138.0, 164.0):
+    for rz in (-30.0, -12.0):
+        joint(V(xw_r - TP, dy, rz), V(1.0, 0, 0), TP + RAIL_TW, 'Rivets - front suspension', ['rail_R', 'panbk_fr'])
+
+# custom axle bracket on the spring pad: it clamps to the pad the way the original leaf spring did (saddle plate on the
+# pad, two U-bolts through the pad's holes, a plate under the beam) and is centred on the pad. The top of the saddle is
+# the bearing surface for the torsion arm's roller; the hairpin ears and (on the left) the panhard ears hang off its
+# rear side. The U-bolt bends sit in grooves in the saddle top so the arm clears them.
+UB_HX, UB_HY = 2.625 * IN / 2.0, 3.0 * IN / 2.0       # U-bolt hole half spacing on the pad: across / along the spring
+UB_R = 6.35                                           # 1/2" U-bolt
+PAD_HALF_Y = 50.0                                     # fore-aft half depth of the axle's spring pad (front axle.FCStd)
+PAD_Y0, PAD_Y1 = Y_FA - PAD_HALF_Y, Y_FA + PAD_HALF_Y
+SADDLE_HX = 24.0                                      # saddle half width (X), between the U-bolt legs
+GROOVE_HW, GROOVE_D = 7.0, 13.0                       # U-bolt grooves across the saddle top
+BP_T, BP_HX, BP_HY = 9.5, 45.0, 48.0                  # plate under the beam
+try:
+    AX_BOT = _fa.common(Part.makeBox(8, 400, 1000, V(PERCH_X - 4.0, -200, -500))).BoundBox.ZMin   # flat underside at the pad centre
+except Exception:
+    AX_BOT = -205.0
+ear_h = HP_HEIM_HALF + TP / 2.0                       # hairpin ear centres either side of the heim
+riser_hx = ear_h + TP / 2.0                           # riser half width = outer face of the ear pair
+web_x0 = pan_xa + 22.0                                # panhard: web plate outboard of the heim, running back to the ears
+for sk, s in SIDES.items():
+    nm = NAME[sk]
+    xp = s * PERCH_X
+    legs_z = [HP_Z - HP_HALF, HP_Z + HP_HALF]
+    key = 'perchbk_' + sk
+    saddle = boxr(*sorted((xp - SADDLE_HX, xp + SADDLE_HX)), PAD_Y0, PAD_Y1, AX_FLAT_TOP, SADDLE_TOP)
+    for dy in (-UB_HY, UB_HY):
+        saddle = saddle.cut(boxr(xp - SADDLE_HX - 1.0, xp + SADDLE_HX + 1.0, Y_FA + dy - GROOVE_HW, Y_FA + dy + GROOVE_HW,
+                                 SADDLE_TOP - GROOVE_D, SADDLE_TOP + 1.0))
+    parts = [saddle]
+    parts.append(boxr(xp - riser_hx, xp + riser_hx, PAD_Y1, PAD_Y1 + TP,
+                      legs_z[0] - 25.0, legs_z[1] + 25.0))                       # riser behind the pad for the stacked hairpin heims
+    for dx in (-ear_h, ear_h):                                                    # one ear pair serves both heims
+        parts.append(boxr(xp + dx - TP / 2.0, xp + dx + TP / 2.0,
+                          PAD_Y1 + TP, HP_AXLE_Y + 20.0, legs_z[0] - 18.0, legs_z[1] + 18.0))
+    if sk == 'L':
+        parts.append(boxr(xp - riser_hx, web_x0 + TP, PAD_Y1, PAD_Y1 + TP, PAN_Z - 25.0, PAN_Z + 25.0))   # low riser out to the panhard web, under the hairpin
+        parts.append(boxr(web_x0, web_x0 + TP, PAD_Y1, PAN_Y + ear_out + 1.5, PAN_Z - 25.0, PAN_Z + 25.0))
+        for d in (-ear_dy, ear_dy):
+            parts.append(boxr(pan_xa - 14.0, web_x0 + TP / 2.0, PAN_Y + d - TP / 2.0, PAN_Y + d + TP / 2.0,
+                              PAN_Z - 16.0, PAN_Z + 16.0))
+    shp = fuse_all(parts)
+    if _fa is not None:
+        shp = shp.cut(_fa)
+    add(key, shp, 'Axle bracket on the spring pad - ' + nm, 'Front suspension', RED)
+    for z in legs_z:
+        drill(key, V(s * HP_AXLE_X, HP_AXLE_Y, z), EX, PIN_R, 120)
+    if sk == 'L':
+        drill(key, V(pan_xa, PAN_Y, PAN_Z), EY, PAN_BOLT_R, 60)
+    add('hppin_' + sk, Part.makeCompound([cylc(V(s * HP_AXLE_X, HP_AXLE_Y, z), EX, PIN_R, 2 * (ear_h + TP) + 4)
+                                          for z in legs_z]),
+        'Hairpin axle pins - ' + nm, 'Front suspension', STEEL)
+
+    # plate under the beam and the two U-bolts (legs through the pad's holes, bends in the saddle grooves)
+    bp_bot = AX_BOT - BP_T
+    plt = boxr(xp - BP_HX, xp + BP_HX, Y_FA - BP_HY, Y_FA + BP_HY, bp_bot, AX_BOT)
+    if _fa is not None:
+        plt = plt.cut(_fa)                                                        # pocketed where the beam dips toward the centre
+    add('axplate_' + sk, plt, 'U-bolt plate under the axle - ' + nm, 'Front suspension', RED)
+    ub = []
+    zc = SADDLE_TOP - UB_R
+    for dy in (-UB_HY, UB_HY):
+        ub.append(cyl2(V(xp - UB_HX, Y_FA + dy, zc), V(xp + UB_HX, Y_FA + dy, zc), UB_R))             # bend
+        for dx in (-UB_HX, UB_HX):
+            ub.append(cyl2(V(xp + dx, Y_FA + dy, zc), V(xp + dx, Y_FA + dy, bp_bot - 22.0), UB_R))    # leg
+            ub.append(Part.makeCylinder(11.0, 10.0, V(xp + dx, Y_FA + dy, bp_bot - 10.0), EZ))         # nut
+            drill('axplate_' + sk, V(xp + dx, Y_FA + dy, bp_bot + BP_T / 2.0), EZ, UB_R + 0.4, 30)
+    add('axubolts_' + sk, Part.makeCompound(ub), 'Axle U-bolts - ' + nm, 'Front suspension', STEEL)
+
+# panhard bolts: head against one ear, nut against the other
+bolts = []
+for px in (pan_xf, pan_xa):
+    y0 = PAN_Y - ear_out - 5.0
+    bolts.append(Part.makeCylinder(PAN_BOLT_R, 2 * ear_out + 10.0, V(px, y0, PAN_Z), EY))
+    bolts.append(Part.makeCylinder(9.5, 5.0, V(px, y0, PAN_Z), EY))
+    bolts.append(Part.makeCylinder(9.0, 5.0, V(px, PAN_Y + ear_out, PAN_Z), EY))
+add('panpins', Part.makeCompound(bolts), 'Panhard bolts', 'Front suspension', STEEL)
 
 # --------------------------------------------------------------------------
 # finalize: drill rivet / pin holes, build the document, save
